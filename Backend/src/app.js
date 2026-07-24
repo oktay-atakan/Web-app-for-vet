@@ -13,7 +13,7 @@ app.use(cors({ origin: env.frontendOrigin }));
 app.use(express.json());
 app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
 
-app.use(routes);
+app.use('/api', routes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
