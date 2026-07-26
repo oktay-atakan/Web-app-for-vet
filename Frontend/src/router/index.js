@@ -16,6 +16,8 @@ import PetsList from '@/pages/pets/list.vue'
 import PetForm from '@/pages/pets/form.vue'
 import AppointmentsList from '@/pages/appointments/list.vue'
 import AppointmentForm from '@/pages/appointments/form.vue'
+import UsersList from '@/pages/users/list.vue'
+import UserForm from '@/pages/users/form.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -79,6 +81,21 @@ const router = createRouter({
       path: '/appointments/:id',
       component: AppointmentForm,
       meta: { roles: ['admin', 'vet', 'staff'] },
+    },
+    {
+      path: '/users',
+      component: UsersList,
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/users/new',
+      component: UserForm,
+      meta: { roles: ['admin'] },
+    },
+    {
+      path: '/users/:id',
+      component: UserForm,
+      meta: { roles: ['admin'] },
     },
   ],
 })
