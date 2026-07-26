@@ -12,6 +12,8 @@ import Login from '@/pages/login.vue'
 import Forbidden from '@/pages/forbidden.vue'
 import CustomersList from '@/pages/customers/list.vue'
 import CustomerForm from '@/pages/customers/form.vue'
+import PetsList from '@/pages/pets/list.vue'
+import PetForm from '@/pages/pets/form.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -44,6 +46,21 @@ const router = createRouter({
     {
       path: '/customers/:id',
       component: CustomerForm,
+      meta: { roles: ['admin', 'vet', 'staff'] },
+    },
+    {
+      path: '/pets',
+      component: PetsList,
+      meta: { roles: ['admin', 'vet', 'staff'] },
+    },
+    {
+      path: '/pets/new',
+      component: PetForm,
+      meta: { roles: ['admin', 'vet'] },
+    },
+    {
+      path: '/pets/:id',
+      component: PetForm,
       meta: { roles: ['admin', 'vet', 'staff'] },
     },
   ],
