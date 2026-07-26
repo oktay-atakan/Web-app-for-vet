@@ -44,13 +44,16 @@ node scripts/create-user.js --email=admin@vetapp.local --password=<password> --f
 ```bash
 cd Frontend
 npm install
+cp .env.example .env   # VITE_API_BASE_URL defaults to http://localhost:4000/api
 npm run dev
 ```
-(Frontend scaffolding is a later milestone — see the wiki for the planned structure.)
+Opens at `http://localhost:3000` (port is fixed in `vite.config.mjs`, not Vite's usual 5173). You'll land on the Login page — sign in with a user created via `scripts/create-user.js` or `npm run seed-test-users` in `Backend/`.
+
+**Note:** if `Backend/.env`'s `FRONTEND_ORIGIN` doesn't match the frontend's actual origin (`http://localhost:3000`), login will fail with a CORS error in the browser console, not a clean 401.
 
 ## Authentication
 
-All endpoints except `POST /api/auth/login` require a valid JWT (`Authorization: Bearer <token>`), obtained by logging in with a user created via `scripts/create-user.js` or the admin-only `POST /api/users` endpoint. Roles (`admin`, `vet`, `staff`) gate access per-endpoint — see the wiki's permission matrix.
+All endpoints except `POST /api/auth/login` require a valid JWT (`Authorization: Bearer <token>`), obtained by logging in with a user created via `scripts/create-user.js` or the admin-only `POST /api/users` endpoint. Roles (`admin`, `vet`, `staff`) gate access per-endpoint — see the wiki's permission matrix. The frontend's own login page, router guards, and role-filtered navigation mirror this but are a UI convenience only; the backend is the actual enforcement point.
 
 ## Documentation
 

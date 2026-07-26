@@ -9,8 +9,8 @@ This file is intended as a reference while developing the project in VS Code wit
 **VetApp** is a three-tier web application that lets a veterinary clinic manage its customers, their pets, procedures performed on pets (vaccinations, etc.), and appointments.
 
 - **Purpose:** Let clinic staff maintain customer/pet records, both log and create new procedures (vaccinations, checkups, etc.), and schedule appointments.
-- **Users:** The app will be used by clinic staff (`admin`, `vet`, `staff`). There is **no** signup/login page — users will be added to the database manually (via seed script / admin script).
-- **Authorization:** Authentication and authorization will be **required for all operations, including appointments**. However, a login **page/UI** won't be built at this stage — for testing, a manually created user will be used (e.g. sending a request to `POST /auth/login` from Postman to get a JWT) to test "as if logged in." The login page is a step to be added later; the auth system itself exists from the start.
+- **Users:** The app is used by clinic staff (`admin`, `vet`, `staff`). There is **no self-service signup** — every account is created by an admin (or, to bootstrap the very first admin, via the `scripts/create-user.js` CLI). The frontend has a real login page (see §2.1) — there's no separate "customer-facing" login, since `staff` is itself a clinic-employee role.
+- **Authorization:** Authentication and authorization are required for all operations except `POST /auth/login`. Both the backend (real enforcement) and the frontend (router guards + role-filtered nav, UI convenience only) implement the same three-role permission matrix — see §4.
 
 ---
 
@@ -20,190 +20,241 @@ This file is intended as a reference while developing the project in VS Code wit
 ┌─────────────┐      HTTP/REST (JSON)      ┌──────────────┐      SQL      ┌──────────────┐
 │  Frontend   │  ───────────────────────►  │   Backend    │  ──────────►  │  Database    │
 │  Vue 3      │  ◄───────────────────────  │  Node.js     │  ◄──────────  │  MySQL       │
-│  (SPA)      │                            │  Express/    │               │              │
-│             │                            │  NestJS      │               │              │
+│  (SPA)      │                            │  Express     │               │              │
 └─────────────┘                            └──────────────┘               └──────────────┘
 ```
 
 ### 2.1 Frontend
-- **Technology:** Vue 3 (Composition API recommended)
-- **State management:** Pinia
-- **HTTP client:** Axios (with an interceptor that automatically attaches the JWT token to headers)
-- **UI library:** **Vuetify** — Material Design based, provides ready-made components (buttons, forms, tables, date pickers, etc.). Makes it easy to build a fast, well-organized UI without wrestling with CSS, which is helpful given no prior frontend experience.
-- **Template:** A free Vuetify-based admin dashboard template (e.g. Creative Tim's "Vuetify Material Dashboard") will be used as a base — sidebar, card, and table layouts come ready-made, so there's no need to design from scratch. Check the license (MIT / personal-commercial use) of any template before downloading it.
-- **Note:** There's no login page, but the token (if any) still needs to be kept in local state/secure storage and attached to requests. How the username/password will be entered (e.g. will there be a simple "login" form, or will the token be supplied directly) needs to be clarified — see Open Questions.
+- **Technology:** Vue 3 (Composition API, `<script setup>`), plain JavaScript (no TypeScript — decided in favor of speed for this small app).
+- **Scaffolded with:** `npm create vuetify@latest` (Vite + Vuetify + Pinia + Vue Router + ESLint). Dev server fixed to port **3000** in `vite.config.mjs` (not Vite's usual 5173).
+- **State management:** Pinia (`src/stores/auth.js` — token + user, persisted to `localStorage`).
+- **HTTP client:** Axios (`src/services/api.js`) — a shared instance with a request interceptor that attaches the JWT automatically, and a response interceptor that clears the session and redirects to `/login` on any `401`.
+- **UI library:** Vuetify (Material Design components — tables, forms, dialogs).
+- **No third-party admin template** — decided against using one (e.g. Creative Tim's Material Dashboard) to avoid license ambiguity; the app shell (nav drawer + app bar, in `App.vue`) is hand-built directly on top of Vuetify's own components.
+- **Routing:** manual routes in `src/router/index.js` (not file-based routing) — each resource has a `list.vue` and a combined `form.vue` (the same component handles create/edit/read-only-detail depending on route params and the user's role). A global `router.beforeEach` guard redirects unauthenticated users to `/login` and wrong-role users to `/forbidden`, based on each route's `meta.roles`.
+- **Login page:** built (`src/pages/login.vue`) — this was originally deferred in early planning but is now live as part of the frontend phase.
 
 ### 2.2 Backend
-- **Technology:** Node.js + Express (if you're new to backend development, starting with Express is recommended — it involves less "magic," so you'll see HTTP/routing/middleware concepts more clearly. NestJS is more structured but has a steeper learning curve; moving to NestJS after learning Express can be a sensible path.)
-- **Layers:**
-  - `routes/` — HTTP endpoint definitions
-  - `controllers/` — request/response handling
-  - `services/` — business logic
-  - `repositories/` (or `models/`) — database access
-  - `middlewares/` — auth, error handling, validation
-- **Database access:** Raw SQL queries via `mysql2/promise` (see section 2.3 — no ORM is used, the schema is designed in MySQL Workbench)
-- **Auth:** JWT-based. Since users are created manually, passwords will be hashed with bcrypt and written to the DB manually / via seed script.
+- **Technology:** Node.js + Express.
+- **Layers** (`Backend/src/`):
+  - `routes/` — HTTP endpoint definitions + `express-validator` chains + `authenticate`/`authorize` middleware wiring
+  - `controllers/` — thin request/response shaping only, no SQL or business logic
+  - `services/` — business rules (existence checks, role-conditional shaping, delete-conflict guards), throws `ApiError`
+  - `repositories/` — raw parameterized SQL only, via `pool.execute(sql, [params])`
+  - `middlewares/` — `auth.middleware.js` (JWT verify), `authorize.middleware.js` (role gate factory), `validate.middleware.js`, `error.middleware.js`
+  - `utils/` — `ApiError`, `asyncHandler`
+- **Database access:** Raw SQL via `mysql2/promise` — no ORM.
+- **Auth:** JWT-based (`jsonwebtoken`), payload is `{ userId, role }`. Passwords hashed with **`bcryptjs`** (pure JS, not native `bcrypt` — avoids a Windows `node-gyp` build step; same API, swappable later if needed).
+- **All routes mounted under `/api`** (e.g. `POST /api/auth/login`, `GET /api/customers`).
 
 ### 2.3 Database
-- **Technology:** MySQL
-- **Schema design:** Designed as an EER Diagram in MySQL Workbench; CREATE TABLE scripts will be generated via "Forward Engineer" and applied to the database.
-- **Backend connection:** No ORM — raw SQL queries will be written using the `mysql2` (promise API) package. Queries will be collected in the `repositories/` layer (see Folder Structure).
-- **Migration/version tracking:** `.sql` schema files exported from Workbench will be versioned in the project, e.g. in `database/schema.sql`; a simple migration script system (e.g. manually numbered `.sql` files for MySQL, similar to `node-pg-migrate`) can be added later if needed.
+- **Technology:** MySQL, InnoDB engine (required for foreign keys/transactions).
+- **Schema file:** `Database/schema.sql` — hand-written (not exported from Workbench), versioned in the repo. Applied manually by a privileged MySQL account; the app itself connects as a least-privilege `vetapp_app` user (`SELECT`/`INSERT`/`UPDATE`/`DELETE` only).
+- **IDs:** `INT AUTO_INCREMENT` on every table.
 
 ---
 
-## 3. Database Schema (Draft)
+## 3. Database Schema
 
-### 3.1 `users` (clinic staff — created manually)
-| Field | Type | Description |
+Matches `Database/schema.sql` exactly — see that file for the authoritative DDL (column widths, indexes, `ON UPDATE CURRENT_TIMESTAMP`, etc.). Summary:
+
+### 3.1 `users` (clinic staff)
+| Field | Type | Notes |
 |---|---|---|
-| id | INT (auto_increment) or UUID | Primary key |
-| email | VARCHAR | Unique |
-| password_hash | VARCHAR | Hashed with bcrypt |
-| full_name | VARCHAR | |
-| role | ENUM | Roles such as `admin`, `vet`, `staff` (for authorization) |
-| created_at | TIMESTAMP | |
+| id | INT AUTO_INCREMENT PK | |
+| email | VARCHAR(255) | `UNIQUE` |
+| password_hash | VARCHAR(255) | bcryptjs hash |
+| full_name | VARCHAR(150) | |
+| role | ENUM('admin','vet','staff') | default `staff` |
+| is_active | TINYINT(1) | default 1 — **soft-disable, no hard delete** (keeps `performed_by`/`assigned_to` history meaningful) |
+| created_at, updated_at | TIMESTAMP | |
 
 ### 3.2 `customers`
-| Field | Type | Description |
+| Field | Type | Notes |
 |---|---|---|
-| id | INT (auto_increment) or UUID | Primary key |
-| full_name | VARCHAR | |
-| phone | VARCHAR | |
-| email | VARCHAR | |
-| address | TEXT | |
-| created_at | TIMESTAMP | |
+| id | INT AUTO_INCREMENT PK | |
+| full_name | VARCHAR(150) | |
+| phone, email | VARCHAR | nullable |
+| address | TEXT | nullable |
+| created_at, updated_at | TIMESTAMP | |
 
 ### 3.3 `pets`
-| Field | Type | Description |
+| Field | Type | Notes |
 |---|---|---|
-| id | INT (auto_increment) or UUID | Primary key |
-| customer_id | FK → customers.id | Owner |
-| name | VARCHAR | |
-| species | VARCHAR | Dog, cat, etc. |
-| breed | VARCHAR | |
-| birth_date | DATE | |
-| weight | DECIMAL | |
-| notes | TEXT | |
+| id | INT AUTO_INCREMENT PK | |
+| customer_id | FK → customers.id | `ON DELETE RESTRICT` |
+| name, species | VARCHAR | required |
+| breed | VARCHAR | nullable |
+| birth_date | DATE | nullable |
+| weight_kg | DECIMAL(6,2) | nullable (named `_kg` to remove unit ambiguity — the original draft just called it `weight`) |
+| notes | TEXT | nullable |
+| created_at, updated_at | TIMESTAMP | |
+
+### 3.4 `procedures` (vaccination / checkup / treatment / surgery / other)
+Not just a historical log — new procedures are actively logged/performed through the system in real time.
+
+| Field | Type | Notes |
+|---|---|---|
+| id | INT AUTO_INCREMENT PK | |
+| pet_id | FK → pets.id | `ON DELETE RESTRICT` |
+| type | ENUM('vaccination','checkup','treatment','surgery','other') | |
+| name | VARCHAR(150) | e.g. "Rabies vaccine" |
+| date_administered | DATE | required |
+| next_due_date | DATE | nullable |
+| performed_by | FK → users.id | `ON DELETE SET NULL`; must reference an `admin`/`vet` user (enforced in `procedures.service.js`) |
+| notes | TEXT | nullable |
 | created_at | TIMESTAMP | |
-
-### 3.4 `procedures` (vaccination / checkup / treatment)
-> Note: This table doesn't just hold historical records — the system will also support **creating/performing new procedures** (e.g. a new vaccination can be logged in real time during a checkup and counted as "performed" at the same time).
-
-| Field | Type | Description |
-|---|---|---|
-| id | INT (auto_increment) or UUID | Primary key |
-| pet_id | FK → pets.id | |
-| type | ENUM/VARCHAR | `vaccination`, `treatment`, `checkup`, etc. |
-| name | VARCHAR | E.g. "Rabies vaccine" |
-| date_administered | DATE | |
-| next_due_date | DATE | Next due date for the vaccine (if applicable) |
-| performed_by | FK → users.id | Staff member who performed it |
-| notes | TEXT | |
 
 ### 3.5 `appointments`
-| Field | Type | Description |
+| Field | Type | Notes |
 |---|---|---|
-| id | INT (auto_increment) or UUID | Primary key |
-| customer_id | FK → customers.id | |
-| pet_id | FK → pets.id | |
-| scheduled_at | TIMESTAMP | Appointment date/time |
-| status | ENUM | `scheduled`, `completed`, `cancelled`, `no_show` |
-| reason | VARCHAR | Reason for the appointment |
-| assigned_to | FK → users.id | Staff member assigned |
-| created_at | TIMESTAMP | |
+| id | INT AUTO_INCREMENT PK | |
+| customer_id | FK → customers.id | `ON DELETE RESTRICT` |
+| pet_id | FK → pets.id | nullable, `ON DELETE RESTRICT` |
+| scheduled_at | **DATETIME** (not TIMESTAMP) | avoids MySQL's automatic session-timezone conversion on appointment times |
+| status | ENUM('scheduled','completed','cancelled','no_show') | default `scheduled` |
+| reason | VARCHAR(255) | nullable |
+| assigned_to | FK → users.id | `ON DELETE SET NULL`; must reference an `admin`/`vet` user if set |
+| created_at, updated_at | TIMESTAMP | |
 
-**Relationships:**
-`customers` 1—N `pets` | `pets` 1—N `procedures` | `customers`/`pets` 1—N `appointments`
+**Relationships:** `customers` 1—N `pets` | `pets` 1—N `procedures` | `customers`/`pets` 1—N `appointments`
 
-> Note: Using `INT AUTO_INCREMENT` for ID columns is recommended (the simplest and most performant option in MySQL); if UUIDs are desired, they need to be generated at the application layer using `CHAR(36)`.
+**Delete semantics:** parent-data FKs (`pets→customers`, `procedures→pets`, `appointments→customers`/`pets`) are `ON DELETE RESTRICT` — deleting a customer/pet with dependents returns a clean `409 Conflict` from the service layer (checked proactively, not by catching a raw MySQL FK error). Staff-reference FKs (`procedures.performed_by`, `appointments.assigned_to`) are `ON DELETE SET NULL`.
 
 ---
 
 ## 4. Authentication & Authorization
 
-- **All operations (including appointments) will require auth.** There will be no public/unauthenticated endpoint.
-- **Current stage:** The login **page** (frontend UI) is not being built yet. The auth system (JWT generation/verification, middleware) will be set up from the start; for testing, a JWT will be obtained by sending a request to `POST /auth/login` from a tool like Postman, and other endpoints will be tested with that token. In other words, manual token retrieval will be used to simulate "being logged in" instead of a real login UI.
-- **Login page (UI):** To be added later — not out of scope, just deprioritized in the order of work.
-- The JWT payload should carry `userId` and `role`.
-- **Roles and permissions:** Will be detailed once the schema and core CRUD flows are in place (e.g. rules like only `admin` can create new users) — see Open Questions.
-- **User creation:** Will be created manually via a seed script (e.g. `scripts/create-user.js`) or a CLI command; no self-service signup.
+- JWT payload: `{ userId, role }`. All endpoints require it except `POST /auth/login`.
+- **Role permission matrix** (fully implemented, both backend-enforced and frontend-mirrored):
+
+| Resource | admin | vet | staff |
+|---|---|---|---|
+| `POST /auth/login` | public | public | public |
+| `/users` (all verbs) | full access | 403 | 403 |
+| `GET /customers`, `GET /customers/:id` | yes | yes | yes |
+| `POST/PUT /customers` | yes | yes | 403 |
+| `DELETE /customers/:id` | yes | 403 | 403 |
+| `GET /pets`, `GET /pets/:id` | yes (full, incl. procedures) | yes (full, incl. procedures) | yes (demographic fields only — `procedures` key omitted from the response) |
+| `POST/PUT /pets` | yes | yes | 403 |
+| `DELETE /pets/:id` | yes | 403 | 403 |
+| `/pets/:petId/procedures`, `/procedures/:id` (GET/POST/PUT) | yes | yes | 403 (no access at all, not even read) |
+| `DELETE /procedures/:id` | yes | 403 | 403 |
+| `/appointments` (GET/POST/PUT) | yes | yes | yes |
+| `DELETE /appointments/:id` | yes | 403 (the one role excluded from delete here) | yes |
+
+- **Additional service-layer checks:** an appointment's `pet_id` (if set) must belong to its `customer_id`; `procedures.performed_by` and `appointments.assigned_to` must reference an `admin`/`vet` user, never `staff`.
+- **User creation:** `scripts/create-user.js` (CLI, bootstraps the first admin) or `POST /api/users` (admin-only, for everyone after that). `npm run seed-test-users` creates three ready-made test accounts (one per role) for local testing.
+- **Known gap:** there's no password-reset/change endpoint yet — a user's password is only ever set at account creation. Flagged as a future addition, not built.
+- **Known simplification:** the frontend's procedure/appointment forms don't expose a picker for `performed_by`/`assigned_to` (defaults to the logged-in user, or left unassigned for appointments) — populating a real picker would require `GET /api/users`, which only `admin` can call, and `vet`/`staff` also need to create these records.
 
 ---
 
-## 5. API Endpoint Draft
+## 5. API Endpoints
 
-> All endpoints (except `/auth/login` below) require auth — they cannot be accessed without a valid JWT. Since there's no login page (UI) yet, tokens will be obtained from `/auth/login` using a tool like Postman during testing.
+All routes are mounted under **`/api`** (e.g. `http://localhost:4000/api/...`).
 
 ```
-POST   /auth/login              → returns JWT
+POST   /api/auth/login                    → public, returns { token, user }
 
-GET    /customers                → list customers
-POST   /customers                → create customer
-GET    /customers/:id            → customer detail (with pets)
-PUT    /customers/:id
-DELETE /customers/:id
+GET    /api/users                         → admin only
+GET    /api/users/:id                     → admin only
+POST   /api/users                         → admin only
+PUT    /api/users/:id                     → admin only (fullName/role/isActive — no email or password change)
 
-GET    /pets
-POST   /pets
-GET    /pets/:id                 → pet detail (with procedure history)
-PUT    /pets/:id
-DELETE /pets/:id
+GET    /api/customers                     → all roles
+GET    /api/customers/:id                 → all roles
+POST   /api/customers                     → admin, vet
+PUT    /api/customers/:id                 → admin, vet
+DELETE /api/customers/:id                 → admin only (409 if pets/appointments still reference it)
 
-GET    /pets/:petId/procedures
-POST   /pets/:petId/procedures   → create/log a new vaccination/procedure
+GET    /api/pets?customerId=              → all roles
+GET    /api/pets/:id                      → all roles (procedures array omitted for staff)
+POST   /api/pets                          → admin, vet
+PUT    /api/pets/:id                      → admin, vet (customer_id cannot be changed after creation)
+DELETE /api/pets/:id                      → admin only (409 if procedures/appointments still reference it)
 
-GET    /appointments
-POST   /appointments             → create appointment
-GET    /appointments/:id
-PUT    /appointments/:id         → update status (completed/cancelled, etc.)
-DELETE /appointments/:id
+GET    /api/pets/:petId/procedures        → admin, vet only
+POST   /api/pets/:petId/procedures        → admin, vet only
+PUT    /api/procedures/:id                → admin, vet only
+DELETE /api/procedures/:id                → admin only
+
+GET    /api/appointments?status=&customerId=  → all roles
+GET    /api/appointments/:id              → all roles
+POST   /api/appointments                  → all roles
+PUT    /api/appointments/:id              → all roles
+DELETE /api/appointments/:id              → admin, staff (not vet)
+
+GET    /api/health                        → public, checks DB connectivity
 ```
+
+All error responses share one JSON shape: `{ "error": { "code": "...", "message": "...", "details": [...] } }` (`details` only present for `422` validation errors).
 
 ---
 
-## 6. Folder Structure (Proposed)
+## 6. Folder Structure (Actual)
 
 ```
-vetapp/
-├── backend/
+Web app Vet/
+├── Backend/
 │   ├── src/
+│   │   ├── config/        (env.js, db.js)
 │   │   ├── routes/
 │   │   ├── controllers/
 │   │   ├── services/
-│   │   ├── repositories/    (raw SQL queries collected here)
+│   │   ├── repositories/
 │   │   ├── middlewares/
+│   │   ├── utils/         (ApiError, asyncHandler)
 │   │   └── app.js
-│   ├── database/
-│   │   └── schema.sql        (schema exported from MySQL Workbench)
 │   ├── scripts/
-│   │   └── create-user.js
+│   │   ├── create-user.js
+│   │   └── seed-test-users.js
+│   ├── server.js
 │   ├── package.json
-│   └── .env
-├── frontend/
+│   ├── .env.example
+│   └── .env               (gitignored)
+├── Frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   ├── views/
-│   │   ├── stores/ (Pinia)
-│   │   ├── router/
-│   │   └── services/ (API client)
+│   │   ├── pages/          (login.vue, forbidden.vue, index.vue, customers/, pets/, appointments/, users/ — each with list.vue + form.vue)
+│   │   ├── stores/          (auth.js — Pinia)
+│   │   ├── router/          (index.js — manual routes + beforeEach guard)
+│   │   ├── services/        (api.js — Axios instance; customers.js, pets.js, procedures.js, appointments.js, users.js — thin REST wrappers)
+│   │   ├── plugins/          (vuetify.js, index.js)
+│   │   └── App.vue           (app shell: nav drawer + app bar, role-filtered)
 │   ├── package.json
-│   └── .env
-└── PROJECT_WIKI.md   ← this file
+│   ├── vite.config.mjs      (dev server fixed to port 3000)
+│   ├── .env.example
+│   └── .env                 (gitignored)
+├── Database/
+│   └── schema.sql
+├── README.md
+└── docs/
+    └── PROJECT_WIKI.md      ← this file
 ```
+
+Note the top-level folders are **capitalized** (`Backend/`, `Frontend/`, `Database/`) — an early plan draft assumed lowercase/nested (`backend/database/schema.sql`), but the actual repo layout (established before implementation started) uses this flatter, capitalized structure instead.
 
 ---
 
-## 7. Decisions & Open Questions
+## 7. Decisions & Notes
 
 ### Resolved decisions
-- ✅ **All operations (including appointments) require auth.** There is no public/unauthenticated endpoint.
-- ✅ The login **page** (frontend UI) won't be built for now; the auth system (JWT) will be set up from the start and verified via manual token retrieval (Postman, etc.) during testing. The login UI will be added later.
-- ✅ Appointment conflict checking and vaccination reminder notifications (email/SMS) are **out of scope / to be added later (improvements)** — just record-keeping is enough for now.
-- ✅ Procedures (vaccination/checkup) are not just historical records — they can also be **actively created/performed** through the system.
+- ✅ All operations require auth except `POST /auth/login`.
+- ✅ Login page is built (frontend phase) — no separate customer signup; `staff` is a clinic-employee role.
+- ✅ Roles/permissions fully specified and implemented — see §4's matrix.
+- ✅ `bcryptjs` over native `bcrypt` (Windows build friction), `express-validator` for validation, `INT AUTO_INCREMENT` IDs.
+- ✅ No ORM — raw SQL via `mysql2/promise`, organized in a `repositories/` layer.
+- ✅ No third-party Vuetify admin template — hand-built app shell instead, to avoid license ambiguity.
+- ✅ Frontend: plain JavaScript, not TypeScript.
+- ✅ Appointment conflict checking and vaccination reminder notifications (email/SMS) remain out of scope for now.
+- ✅ Procedures are actively logged/performed through the system, not just historical records.
+- ✅ `users.is_active` for soft-disable — no hard delete of staff accounts (keeps procedure/appointment history attributable).
 
-### Open questions
-- [ ] What permissions will each role (`admin`, `vet`, `staff`) have exactly? → To be determined once the schema and core CRUD flows are in place.
+### Known gaps / possible follow-ups
+- [ ] No password-reset/change endpoint — password is set once, at account creation.
+- [ ] No UI picker for `procedures.performed_by` / `appointments.assigned_to` (self-attribution / unassigned instead) — real picker needs `GET /api/users` opened up beyond admin-only, or a narrower "list active vets" endpoint.
+- [ ] No automated test suite yet (a small Jest + Supertest suite covering login, one role-check, and one CRUD round-trip was scoped but not built — optional "M9" in the implementation plan).
+- [ ] Frontend dev environment requires Node ≥20.19 (managed via Nodist on this machine, switched from a pre-installed 20.10.0 to 22.22.0) for the Vite/Vuetify scaffolding tools; the actual Vite 5.x runtime itself would have worked on the older Node too.
 
 ---
 
