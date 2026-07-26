@@ -10,6 +10,8 @@ import { useAuthStore } from '@/stores/auth'
 import Index from '@/pages/index.vue'
 import Login from '@/pages/login.vue'
 import Forbidden from '@/pages/forbidden.vue'
+import CustomersList from '@/pages/customers/list.vue'
+import CustomerForm from '@/pages/customers/form.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -28,6 +30,21 @@ const router = createRouter({
       path: '/forbidden',
       component: Forbidden,
       meta: { public: true },
+    },
+    {
+      path: '/customers',
+      component: CustomersList,
+      meta: { roles: ['admin', 'vet', 'staff'] },
+    },
+    {
+      path: '/customers/new',
+      component: CustomerForm,
+      meta: { roles: ['admin', 'vet'] },
+    },
+    {
+      path: '/customers/:id',
+      component: CustomerForm,
+      meta: { roles: ['admin', 'vet', 'staff'] },
     },
   ],
 })
