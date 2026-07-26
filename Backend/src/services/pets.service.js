@@ -1,5 +1,6 @@
 const petsRepository = require('../repositories/pets.repository');
 const customersRepository = require('../repositories/customers.repository');
+const proceduresRepository = require('../repositories/procedures.repository');
 const ApiError = require('../utils/ApiError');
 
 async function assertCustomerExists(customerId) {
@@ -20,11 +21,12 @@ async function getPet(id, role) {
   }
 
   // Staff get demographic fields only; procedure history is clinical data,
-  // reserved for admin/vet (wired up fully once procedures exist in M6).
+  // reserved for admin/vet.
   if (role === 'staff') {
     return pet;
   }
-  return { ...pet, procedures: [] };
+  const procedures = await proceduresRepository.findByPetId(id);
+  return { ...pet, procedures };
 }
 
 async function createPet(data) {
