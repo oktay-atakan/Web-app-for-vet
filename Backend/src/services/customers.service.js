@@ -36,9 +36,14 @@ async function deleteCustomer(id) {
     throw ApiError.notFound(`Customer ${id} not found`);
   }
 
-  const hasPets = await customersRepository.hasPets(id);
-  if (hasPets) {
-    throw ApiError.conflict(`Customer ${id} cannot be deleted while pets are still on file`);
+  const [hasPets, hasAppointments] = await Promise.all([
+    customersRepository.hasPets(id),
+    customersRepository.hasAppointments(id),
+  ]);
+  if (hasPets || hasAppointments) {
+    throw ApiError.conflict(
+      `Customer ${id} cannot be deleted while pets or appointments are still on file`
+    );
   }
 
   await customersRepository.remove(id);

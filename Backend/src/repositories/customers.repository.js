@@ -35,4 +35,12 @@ async function hasPets(id) {
   return rows.length > 0;
 }
 
-module.exports = { findAll, findById, create, update, remove, hasPets };
+async function hasAppointments(id) {
+  const [rows] = await pool.execute(
+    'SELECT id FROM appointments WHERE customer_id = ? LIMIT 1',
+    [id]
+  );
+  return rows.length > 0;
+}
+
+module.exports = { findAll, findById, create, update, remove, hasPets, hasAppointments };
