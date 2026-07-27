@@ -60,6 +60,7 @@
   import { ref } from 'vue'
   import { useRouter } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
+  import { getErrorMessage } from '@/utils/errors'
 
   const email = ref('')
   const password = ref('')
@@ -76,7 +77,7 @@
       await auth.login(email.value, password.value)
       router.push('/')
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Login failed'
+      errorMessage.value = getErrorMessage(err, 'Login failed')
     } finally {
       loading.value = false
     }

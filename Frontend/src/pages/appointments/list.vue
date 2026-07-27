@@ -31,7 +31,7 @@
       @click:row="(event, { item }) => $router.push(`/appointments/${item.id}`)"
     >
       <template #item.scheduled_at="{ value }">
-        {{ new Date(value).toLocaleString() }}
+        {{ new Date(value.replace(' ', 'T')).toLocaleString() }}
       </template>
       <template #item.customer_id="{ value }">
         {{ customerNameById[value] || `#${value}` }}

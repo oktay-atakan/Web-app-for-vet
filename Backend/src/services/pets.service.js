@@ -2,6 +2,7 @@ const petsRepository = require('../repositories/pets.repository');
 const customersRepository = require('../repositories/customers.repository');
 const proceduresRepository = require('../repositories/procedures.repository');
 const ApiError = require('../utils/ApiError');
+const resolveOptionalField = require('../utils/resolveOptionalField');
 
 async function assertCustomerExists(customerId) {
   const customer = await customersRepository.findById(customerId);
@@ -31,7 +32,13 @@ async function getPet(id, role) {
 
 async function createPet(data) {
   await assertCustomerExists(data.customerId);
-  return petsRepository.create(data);
+  return petsRepository.create({
+    ...data,
+    breed: data.breed || null,
+    birthDate: data.birthDate || null,
+    weightKg: data.weightKg || null,
+    notes: data.notes || null,
+  });
 }
 
 async function updatePet(id, data) {
@@ -42,10 +49,10 @@ async function updatePet(id, data) {
   return petsRepository.update(id, {
     name: data.name ?? existing.name,
     species: data.species ?? existing.species,
-    breed: data.breed ?? existing.breed,
-    birthDate: data.birthDate ?? existing.birth_date,
-    weightKg: data.weightKg ?? existing.weight_kg,
-    notes: data.notes ?? existing.notes,
+    breed: resolveOptionalField(data.breed, existing.breed),
+    birthDate: resolveOptionalField(data.birthDate, existing.birth_date),
+    weightKg: resolveOptionalField(data.weightKg, existing.weight_kg),
+    notes: resolveOptionalField(data.notes, existing.notes),
   });
 }
 

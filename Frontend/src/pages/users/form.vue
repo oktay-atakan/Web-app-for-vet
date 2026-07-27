@@ -79,6 +79,7 @@
   import { computed, onMounted, reactive, ref } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
   import { createUser, getUser, updateUser } from '@/services/users'
+  import { getErrorMessage } from '@/utils/errors'
 
   const route = useRoute()
   const router = useRouter()
@@ -125,7 +126,7 @@
         })
       }
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to save user'
+      errorMessage.value = getErrorMessage(err, 'Failed to save user')
     } finally {
       saving.value = false
     }
