@@ -95,6 +95,7 @@
   } from '@/services/appointments'
   import { listCustomers } from '@/services/customers'
   import { listPets } from '@/services/pets'
+  import { getErrorMessage } from '@/utils/errors'
 
   const route = useRoute()
   const router = useRouter()
@@ -138,7 +139,9 @@
       const appointment = await getAppointment(route.params.id)
       form.customerId = appointment.customer_id
       form.petId = appointment.pet_id
-      form.scheduledAt = appointment.scheduled_at.slice(0, 16)
+      // MySQL returns DATETIME as "YYYY-MM-DD HH:MM:SS"; the datetime-local
+      // input needs a "T" separator instead of a space.
+      form.scheduledAt = appointment.scheduled_at.replace(' ', 'T').slice(0, 16)
       form.status = appointment.status
       form.reason = appointment.reason
       petsForCustomer.value = await listPets({ customerId: appointment.customer_id })
@@ -158,7 +161,7 @@
         await updateAppointment(route.params.id, form)
       }
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to save appointment'
+      errorMessage.value = getErrorMessage(err, 'Failed to save appointment')
     } finally {
       saving.value = false
     }
@@ -171,7 +174,7 @@
       await deleteAppointment(route.params.id)
       router.push('/appointments')
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to delete appointment'
+      errorMessage.value = getErrorMessage(err, 'Failed to delete appointment')
       confirmDelete.value = false
     } finally {
       deleting.value = false

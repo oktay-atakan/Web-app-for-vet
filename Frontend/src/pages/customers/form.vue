@@ -77,6 +77,7 @@
   import { useRoute, useRouter } from 'vue-router'
   import { useAuthStore } from '@/stores/auth'
   import { createCustomer, deleteCustomer, getCustomer, updateCustomer } from '@/services/customers'
+  import { getErrorMessage } from '@/utils/errors'
 
   const route = useRoute()
   const router = useRouter()
@@ -118,7 +119,7 @@
         await updateCustomer(route.params.id, form)
       }
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to save customer'
+      errorMessage.value = getErrorMessage(err, 'Failed to save customer')
     } finally {
       saving.value = false
     }
@@ -131,7 +132,7 @@
       await deleteCustomer(route.params.id)
       router.push('/customers')
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to delete customer'
+      errorMessage.value = getErrorMessage(err, 'Failed to delete customer')
       confirmDelete.value = false
     } finally {
       deleting.value = false

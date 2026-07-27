@@ -190,6 +190,7 @@
   import { createPet, deletePet, getPet, updatePet } from '@/services/pets'
   import { listCustomers } from '@/services/customers'
   import { createProcedure, deleteProcedure, updateProcedure } from '@/services/procedures'
+  import { getErrorMessage } from '@/utils/errors'
 
   const route = useRoute()
   const router = useRouter()
@@ -255,7 +256,7 @@
         await updatePet(route.params.id, form)
       }
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to save pet'
+      errorMessage.value = getErrorMessage(err, 'Failed to save pet')
     } finally {
       saving.value = false
     }
@@ -268,7 +269,7 @@
       await deletePet(route.params.id)
       router.push('/pets')
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to delete pet'
+      errorMessage.value = getErrorMessage(err, 'Failed to delete pet')
       confirmDelete.value = false
     } finally {
       deleting.value = false
@@ -331,7 +332,7 @@
       procedureDialog.value = false
       await loadPet()
     } catch (err) {
-      procedureError.value = err.response?.data?.error?.message || 'Failed to save procedure'
+      procedureError.value = getErrorMessage(err, 'Failed to save procedure')
     } finally {
       savingProcedure.value = false
     }
@@ -342,7 +343,7 @@
       await deleteProcedure(id)
       await loadPet()
     } catch (err) {
-      errorMessage.value = err.response?.data?.error?.message || 'Failed to delete procedure'
+      errorMessage.value = getErrorMessage(err, 'Failed to delete procedure')
     }
   }
 

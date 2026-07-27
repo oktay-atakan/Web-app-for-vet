@@ -10,6 +10,10 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   namedPlaceholders: true,
+  // Return DATE/DATETIME/TIMESTAMP columns as raw strings instead of JS Date
+  // objects — avoids a local-timezone round-trip that shifted dates by a day
+  // (server timezone is UTC+3; Date objects serialize to JSON as UTC).
+  dateStrings: true,
 });
 
 module.exports = pool;

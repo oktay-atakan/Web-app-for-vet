@@ -2,6 +2,7 @@ const proceduresRepository = require('../repositories/procedures.repository');
 const petsRepository = require('../repositories/pets.repository');
 const usersRepository = require('../repositories/users.repository');
 const ApiError = require('../utils/ApiError');
+const resolveOptionalField = require('../utils/resolveOptionalField');
 
 async function assertPetExists(petId) {
   const pet = await petsRepository.findById(petId);
@@ -11,7 +12,7 @@ async function assertPetExists(petId) {
 }
 
 async function assertPerformedByIsClinical(performedBy) {
-  if (performedBy == null) {
+  if (performedBy == null || performedBy === '') {
     return;
   }
   const user = await usersRepository.findById(performedBy);
@@ -36,7 +37,13 @@ async function getProcedure(id) {
 async function createForPet(petId, data) {
   await assertPetExists(petId);
   await assertPerformedByIsClinical(data.performedBy);
-  return proceduresRepository.create({ ...data, petId });
+  return proceduresRepository.create({
+    ...data,
+    petId,
+    nextDueDate: data.nextDueDate || null,
+    performedBy: data.performedBy || null,
+    notes: data.notes || null,
+  });
 }
 
 async function updateProcedure(id, data) {
@@ -50,9 +57,9 @@ async function updateProcedure(id, data) {
     type: data.type ?? existing.type,
     name: data.name ?? existing.name,
     dateAdministered: data.dateAdministered ?? existing.date_administered,
-    nextDueDate: data.nextDueDate ?? existing.next_due_date,
-    performedBy: data.performedBy ?? existing.performed_by,
-    notes: data.notes ?? existing.notes,
+    nextDueDate: resolveOptionalField(data.nextDueDate, existing.next_due_date),
+    performedBy: resolveOptionalField(data.performedBy, existing.performed_by),
+    notes: resolveOptionalField(data.notes, existing.notes),
   });
 }
 
